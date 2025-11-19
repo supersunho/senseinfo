@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, func
-from typing import List, Optional
+from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 import logging
 
