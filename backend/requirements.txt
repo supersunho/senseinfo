@@ -1,8 +1,8 @@
 # backend/requirements.txt
 # Core Framework & Dependencies
 fastapi==0.115.2
+starlette==0.37.2  # FastAPI 0.115.2와 호환되는 버전
 uvicorn[standard]==0.32.0
-starlette==0.32.0.post1  # FastAPI의 핵심 의존성
 click==8.1.7
 h11==0.14.0
 httptools==0.6.1
@@ -29,7 +29,7 @@ redis==5.0.1
 # Configuration & Validation
 pydantic==2.5.0
 pydantic-settings==2.1.0
-pydantic-core==2.14.0  # Pydantic 핵심
+pydantic-core==2.14.0
 typing-extensions==4.8.0
 
 # Async
