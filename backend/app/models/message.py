@@ -3,7 +3,7 @@
 Message model for storing forwarded/filtered Telegram messages.
 """
 
-from sqlalchemy import Column, BigInteger, String, Text, BigInteger, ForeignKey, DateTime, JSON
+from sqlalchemy import Column, BigInteger, String, Text, Boolean, ForeignKey, DateTime, JSON 
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base import Base
