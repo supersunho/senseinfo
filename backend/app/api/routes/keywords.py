@@ -8,11 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, and_
-from typing import List
+from typing import List, Optional  
 import logging
+from datetime import datetime
 
 from app.db.session import get_db
 from app.core.rate_limiter import rate_limiter
+from app.core.config import settings
 from app.models.keyword import Keyword
 from app.models.channel import Channel
 from app.models.user import User
@@ -51,21 +53,7 @@ async def add_keyword(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user)
 ) -> KeywordResponse:
-    """
-    Add a new keyword filter to a channel.
-    
-    Args:
-        request: Keyword creation request
-        db: Database session
-        user: Current authenticated user
-        
-    Returns:
-        Created keyword response
-        
-    Raises:
-        HTTPException: If channel not found or limit reached
-    """
-    # Rate limiting
+    """Add a new keyword filter to a channel."""
     await rate_limiter.acquire(user.id)
     
     # Verify channel ownership
@@ -145,20 +133,7 @@ async def list_keywords(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user)
 ) -> KeywordListResponse:
-    """
-    List keywords for user's channels.
-    
-    Args:
-        channel_id: Filter by specific channel
-        include_inactive: Whether to include inactive keywords
-        skip: Pagination offset
-        limit: Pagination limit
-        db: Database session
-        user: Current authenticated user
-        
-    Returns:
-        Keyword list response with pagination
-    """
+    """List keywords for user's channels."""
     query = (
         select(Keyword)
         .join(Channel, Keyword.channel_id == Channel.id)
@@ -213,17 +188,7 @@ async def delete_keyword(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user)
 ) -> None:
-    """
-    Delete (deactivate) a keyword.
-    
-    Args:
-        keyword_id: Keyword ID to delete
-        db: Database session
-        user: Current authenticated user
-        
-    Raises:
-        HTTPException: If keyword not found or not owned by user
-    """
+    """Delete (deactivate) a keyword."""
     result = await db.execute(
         select(Keyword)
         .join(Channel, Keyword.channel_id == Channel.id)
@@ -253,20 +218,7 @@ async def toggle_keyword(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user)
 ) -> KeywordResponse:
-    """
-    Toggle keyword active status.
-    
-    Args:
-        keyword_id: Keyword ID
-        db: Database session
-        user: Current authenticated user
-        
-    Returns:
-        Updated keyword response
-        
-    Raises:
-        HTTPException: If keyword not found
-    """
+    """Toggle keyword active status."""
     result = await db.execute(
         select(Keyword)
         .join(Channel, Keyword.channel_id == Channel.id)
@@ -296,8 +248,3 @@ async def toggle_keyword(
         is_active=keyword.is_active,
         created_at=keyword.created_at.isoformat()
     )
-
-
-# Import required modules
-from datetime import datetime
-from typing import Optional
