@@ -8,6 +8,7 @@ import { Header } from "../components/layout/Header";
 import { api } from "../services/api";
 import { toast } from "react-hot-toast";
 import { Plus, Trash2, Filter, Ban, Check } from "lucide-react";
+import { cn } from "../utils/cn";
 
 interface Channel {
     id: number;

@@ -28,8 +28,8 @@ export interface ApiError {
     message: string;
 }
 
-// Create axios instance
-const api: AxiosInstance = axios.create({
+// Create axios instance with named export
+export const api: AxiosInstance = axios.create({
     baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000/api",
     timeout: 10000,
     headers: {
@@ -130,4 +130,5 @@ api.interceptors.response.use(
     }
 );
 
+// Default export for backward compatibility
 export default api;
