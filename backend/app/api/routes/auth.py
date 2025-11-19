@@ -7,7 +7,7 @@ Handles phone verification, 2FA, and session management.
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.errors import (
@@ -20,6 +20,7 @@ from telethon.errors import (
     PasswordHashInvalidError
 )
 import logging
+from typing import Optional, Dict, Any  # ← Optional, Dict, Any 추가
 from app.db.session import get_db
 from app.core.config import settings
 from app.core.telegram_client import client_manager
@@ -291,7 +292,7 @@ async def verify_telegram_2fa(
         
         await db.flush()
         
-        # Cleanup
+        # Clean up session
         await client.disconnect()
         del auth_sessions[request.phone_number]
         
@@ -381,5 +382,5 @@ async def cleanup_auth_session(phone_number: str, delay: int = 300):
 # Import required modules
 import time
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 import asyncio
