@@ -54,6 +54,7 @@ services:
       dockerfile: Dockerfile.prod
     environment:
       - NODE_ENV=production
+      - VITE_API_URL=/api
     deploy:
       resources:
         limits:
