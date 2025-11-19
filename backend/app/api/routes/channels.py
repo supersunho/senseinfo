@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
+from telethon import TelegramClient
 from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelRequest
 from telethon.tl.types import InputChannel, Channel as TelegramChannel
 from telethon.errors import (
@@ -18,15 +19,15 @@ from telethon.errors import (
     UsernameNotOccupiedError
 )
 import logging
+from datetime import datetime
 from typing import List, Optional
 
 from app.db.session import get_db
-from app.core.telegram_client import get_telegram_client
+from app.api.dependencies import get_telegram_client, get_current_user  # ← 여기서 import
 from app.core.rate_limiter import rate_limiter
+from app.core.config import settings
 from app.models.channel import Channel
 from app.models.user import User
-from app.models.keyword import Keyword
-from app.api.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,7 @@ router = APIRouter(prefix="/channels", tags=["channels"])
 
 class ChannelCreateRequest(BaseModel):
     """Request model for channel creation"""
-    username: str = Field(..., pattern=r"^@[a-zA-Z0-9_]{5,32}$", description="Channel username with @")
+    username: str = Field(..., pattern=r"^@?[a-zA-Z0-9_]{5,32}$", description="Channel username with or without @")
 
 
 class ChannelResponse(BaseModel):
@@ -62,32 +63,17 @@ async def add_channel(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user)
 ) -> ChannelResponse:
-    """
-    Join a new Telegram channel and start monitoring.
-    
-    Args:
-        request: Channel creation request with username
-        client: Telegram client instance
-        db: Database session
-        user: Current authenticated user
-        
-    Returns:
-        Channel response with metadata
-        
-    Raises:
-        HTTPException: If channel cannot be joined or limit reached
-    """
-    # Rate limiting
+    """Join a new Telegram channel and start monitoring."""
     await rate_limiter.acquire(user.id)
     
     # Check channel limit
-    channel_count = await db.execute(
+    channel_count_result = await db.execute(
         select(Channel).where(
             Channel.user_id == user.id,
             Channel.is_active == True
         )
     )
-    active_channels = len(channel_count.scalars().all())
+    active_channels = len(channel_count_result.scalars().all())
     
     if active_channels >= settings.max_channels_per_account:
         raise HTTPException(
@@ -132,16 +118,16 @@ async def add_channel(
             description=getattr(entity, 'about', None),
             user_id=user.id,
             is_active=True,
-            joined_at=datetime.utcnow()
+            is_monitoring=True,
+            joined_at=datetime.utcnow(),
+            last_message_id=0,
+            message_count=0,
+            total_messages_processed=0
         )
         
         db.add(channel)
         await db.commit()
         await db.refresh(channel)
-        
-        # Update user channel count
-        user.channel_count = active_channels + 1
-        await db.commit()
         
         logger.info(f"User {user.id} joined channel @{username}")
         
@@ -190,17 +176,7 @@ async def list_channels(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user)
 ) -> ChannelListResponse:
-    """
-    List all monitored channels for the current user.
-    
-    Args:
-        skip: Number of channels to skip (pagination)
-        limit: Maximum channels to return (pagination)
-        include_inactive: Whether to include inactive channels
-        
-    Returns:
-        Channel list response with pagination info
-    """
+    """List all monitored channels for the current user."""
     query = select(Channel).where(Channel.user_id == user.id)
     
     if not include_inactive:
@@ -243,20 +219,7 @@ async def get_channel(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user)
 ) -> ChannelResponse:
-    """
-    Get details of a specific channel.
-    
-    Args:
-        channel_id: Channel ID
-        db: Database session
-        user: Current authenticated user
-        
-    Returns:
-        Channel response
-        
-    Raises:
-        HTTPException: If channel not found
-    """
+    """Get details of a specific channel."""
     result = await db.execute(
         select(Channel).where(
             Channel.id == channel_id,
@@ -288,22 +251,9 @@ async def delete_channel(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user)
 ) -> None:
-    """
-    Stop monitoring and leave a Telegram channel.
-    
-    Args:
-        channel_id: Channel ID to delete
-        client: Telegram client instance
-        db: Database session
-        user: Current authenticated user
-        
-    Raises:
-        HTTPException: If channel not found or cannot be left
-    """
-    # Rate limiting
+    """Stop monitoring and leave a Telegram channel."""
     await rate_limiter.acquire(user.id)
     
-    # Get channel
     result = await db.execute(
         select(Channel).where(
             Channel.id == channel_id,
@@ -326,9 +276,6 @@ async def delete_channel(
         # Mark as inactive
         channel.is_active = False
         
-        # Update user channel count
-        user.channel_count = max(0, user.channel_count - 1)
-        
         await db.commit()
         
         logger.info(f"User {user.id} left channel @{channel.username}")
@@ -346,20 +293,7 @@ async def toggle_channel_monitoring(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user)
 ) -> ChannelResponse:
-    """
-    Toggle channel monitoring status (active/inactive).
-    
-    Args:
-        channel_id: Channel ID
-        db: Database session
-        user: Current authenticated user
-        
-    Returns:
-        Updated channel response
-        
-    Raises:
-        HTTPException: If channel not found
-    """
+    """Toggle channel monitoring status (active/inactive)."""
     result = await db.execute(
         select(Channel).where(
             Channel.id == channel_id,
@@ -388,9 +322,3 @@ async def toggle_channel_monitoring(
         joined_at=channel.joined_at.isoformat(),
         message_count=channel.message_count
     )
-
-
-# Import required modules
-from datetime import datetime
-from typing import List, Dict, Any
-from app.core.config import settings
