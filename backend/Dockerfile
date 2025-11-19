@@ -22,9 +22,8 @@ RUN apt-get update && apt-get install -y \
 # Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install Python dependencies with verbose output
-RUN pip install --no-deps --no-cache-dir -r requirements.txt && \
-    pip install --no-deps --no-cache-dir click h11 httptools websockets
+# Install ALL dependencies without --no-deps flag
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . .
