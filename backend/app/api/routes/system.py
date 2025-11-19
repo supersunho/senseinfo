@@ -137,7 +137,8 @@ async def health_check() -> Dict[str, str]:
     Returns:
         OK status if service is running
     """
-    return {"status": "ok"}
+    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+    # return {"status": "ok"}
 
 
 @router.get("/metrics")

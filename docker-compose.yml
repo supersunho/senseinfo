@@ -57,6 +57,8 @@ services:
       - ./backend:/app
     networks:
       - infosense-network
+    ports:
+      - "8000:8000"
     restart: unless-stopped
 
   frontend:
