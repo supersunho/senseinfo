@@ -4,7 +4,7 @@ Proxy manager for rotating proxy connections.
 Supports multiple proxy types and automatic rotation.
 """
 
-from typing import List, Dict, Any, Iterator
+from typing import List, Dict, Any, Iterator, Optional  # ← Optional 추가
 import random
 import logging
 from app.core.config import settings
