@@ -10,6 +10,8 @@ from app.core.config import settings
 from typing import AsyncGenerator
 import logging
 
+from app.db.base import Base
+
 logger = logging.getLogger(__name__)
 
 # Create async engine
