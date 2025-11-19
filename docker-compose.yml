@@ -11,9 +11,9 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-infosense}
     volumes:
       - ./postgres_data:/var/lib/postgresql/data
-      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
+      # - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
-      - internal_network
+      - infosense-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-infosense}"]
       interval: 10s
@@ -26,7 +26,7 @@ services:
     volumes:
       - ./redis_data:/data
     networks:
-      - internal_network
+      - infosense-network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -56,8 +56,7 @@ services:
       - ./sessions:/app/sessions
       - ./backend:/app
     networks:
-      - internal_network
-      - external_network
+      - infosense-network
     restart: unless-stopped
 
   frontend:
@@ -73,14 +72,10 @@ services:
       - VITE_API_URL=http://localhost:8000
     volumes:
       - ./frontend:/app
-      - /app/node_modules
     networks:
-      - external_network
+      - infosense-network
     restart: unless-stopped
 
 networks:
-  internal_network:
-    internal: true
-    driver: bridge
-  external_network:
+  infosense-network:
     driver: bridge
