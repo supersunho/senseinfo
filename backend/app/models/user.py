@@ -3,9 +3,9 @@
 User model for storing Telegram authentication and account information.
 """
 
-from sqlalchemy import Column, BigInteger, String, Boolean, DateTime, Text
+from sqlalchemy import Column, BigInteger, String, Boolean, DateTime, Text, Date
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func, Date  # ← Date 추가
+from sqlalchemy.sql import func 
 from app.db.base import Base
 
 
