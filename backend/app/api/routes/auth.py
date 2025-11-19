@@ -1,9 +1,4 @@
 # backend/app/api/routes/auth.py
-"""
-Telegram authentication endpoints.
-Handles phone verification, 2FA, and session management.
-"""
-
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,44 +15,42 @@ from telethon.errors import (
     PasswordHashInvalidError
 )
 import logging
-from typing import Optional, Dict, Any  # ← Optional, Dict, Any 추가
+import time
+from datetime import datetime
+from typing import Optional, Dict, Any
+import asyncio
 from app.db.session import get_db
 from app.core.config import settings
 from app.core.telegram_client import client_manager
 from app.models.user import User
 from app.utils.logger import logger
+from app.api.dependencies import get_current_user 
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
 
 class PhoneVerificationRequest(BaseModel):
-    """Request model for phone number verification"""
     phone_number: str = Field(..., pattern=r"^\+\d{10,15}$", description="Phone number with country code")
 
 
 class CodeVerificationRequest(BaseModel):
-    """Request model for verification code"""
     phone_number: str = Field(..., pattern=r"^\+\d{10,15}$")
     phone_code_hash: str = Field(..., min_length=10)
     code: str = Field(..., min_length=4, max_length=6)
 
 
 class PasswordVerificationRequest(BaseModel):
-    """Request model for 2FA password"""
     phone_number: str = Field(..., pattern=r"^\+\d{10,15}$")
     password: str = Field(..., min_length=1)
 
 
 class AuthResponse(BaseModel):
-    """Response model for authentication operations"""
     status: str
     message: str
     requires_2fa: bool = False
     user_id: Optional[int] = None
 
 
-# Temporary storage for authentication sessions
-# In production, use Redis or database
 auth_sessions: Dict[str, Dict] = {}
 
 
@@ -67,20 +60,7 @@ async def start_telegram_auth(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db)
 ) -> AuthResponse:
-    """
-    Initiate Telegram authentication by sending verification code.
-    
-    Args:
-        request: Phone verification request with phone number
-        
-    Returns:
-        Authentication response with status
-        
-    Raises:
-        HTTPException: If phone number is invalid or API credentials are wrong
-    """
     try:
-        # Create temporary client
         client = TelegramClient(
             session=f"{settings.session_directory}/temp_{request.phone_number}",
             api_id=settings.telegram_api_id,
@@ -88,18 +68,14 @@ async def start_telegram_auth(
         )
         
         await client.connect()
-        
-        # Send verification code
         sent_code = await client.send_code_request(request.phone_number)
         
-        # Store session data temporarily
         auth_sessions[request.phone_number] = {
             "client": client,
             "phone_code_hash": sent_code.phone_code_hash,
             "timestamp": time.time()
         }
         
-        # Schedule cleanup task
         background_tasks.add_task(cleanup_auth_session, request.phone_number, delay=300)
         
         logger.info(f"Verification code sent to {request.phone_number}")
@@ -138,20 +114,7 @@ async def verify_telegram_code(
     request: CodeVerificationRequest,
     db: AsyncSession = Depends(get_db)
 ) -> AuthResponse:
-    """
-    Verify Telegram verification code and complete authentication.
-    
-    Args:
-        request: Code verification request
-        
-    Returns:
-        Authentication response with user ID
-        
-    Raises:
-        HTTPException: If code is invalid or 2FA is required
-    """
     try:
-        # Retrieve session data
         session_data = auth_sessions.get(request.phone_number)
         if not session_data:
             raise HTTPException(
@@ -162,21 +125,18 @@ async def verify_telegram_code(
         client = session_data["client"]
         
         try:
-            # Sign in with code
             user = await client.sign_in(
                 phone=request.phone_number,
                 code=request.code,
                 phone_code_hash=session_data["phone_code_hash"]
             )
             
-            # Save user to database
             db_user = await db.execute(
                 select(User).where(User.telegram_id == user.id)
             )
             existing_user = db_user.scalar_one_or_none()
             
             if existing_user:
-                # Update existing user
                 existing_user.is_authenticated = True
                 existing_user.session_string = StringSession.save(client.session)
                 existing_user.last_auth_date = datetime.utcnow()
@@ -185,7 +145,6 @@ async def verify_telegram_code(
                 existing_user.username = getattr(user, 'username', None)
                 user_obj = existing_user
             else:
-                # Create new user
                 new_user = User(
                     telegram_id=user.id,
                     phone_number=request.phone_number,
@@ -201,7 +160,6 @@ async def verify_telegram_code(
             
             await db.flush()
             
-            # Clean up session
             await client.disconnect()
             del auth_sessions[request.phone_number]
             
@@ -215,7 +173,6 @@ async def verify_telegram_code(
             )
             
         except SessionPasswordNeededError:
-            # 2FA required
             return AuthResponse(
                 status="2fa_required",
                 message="Two-factor authentication required",
@@ -242,17 +199,7 @@ async def verify_telegram_2fa(
     request: PasswordVerificationRequest,
     db: AsyncSession = Depends(get_db)
 ) -> AuthResponse:
-    """
-    Verify 2FA password for Telegram authentication.
-    
-    Args:
-        request: 2FA password verification request
-        
-    Returns:
-        Authentication response with user ID
-    """
     try:
-        # Retrieve session data
         session_data = auth_sessions.get(request.phone_number)
         if not session_data:
             raise HTTPException(
@@ -261,11 +208,8 @@ async def verify_telegram_2fa(
             )
         
         client = session_data["client"]
-        
-        # Sign in with 2FA password
         user = await client.sign_in(password=request.password)
         
-        # Save user to database (same logic as verify code)
         db_user = await db.execute(
             select(User).where(User.telegram_id == user.id)
         )
@@ -292,7 +236,6 @@ async def verify_telegram_2fa(
         
         await db.flush()
         
-        # Clean up session
         await client.disconnect()
         del auth_sessions[request.phone_number]
         
@@ -323,20 +266,9 @@ async def logout(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ) -> AuthResponse:
-    """
-    Logout user and disconnect Telegram client.
-    
-    Args:
-        user: Current authenticated user
-        
-    Returns:
-        Logout response
-    """
     try:
-        # Disconnect Telegram client
         await client_manager.disconnect_client(user.id)
         
-        # Update user status
         user.is_authenticated = False
         user.session_string = None
         
@@ -359,13 +291,6 @@ async def logout(
 
 
 async def cleanup_auth_session(phone_number: str, delay: int = 300):
-    """
-    Clean up authentication session after delay.
-    
-    Args:
-        phone_number: Phone number to clean up
-        delay: Delay in seconds before cleanup
-    """
     await asyncio.sleep(delay)
     
     if phone_number in auth_sessions:
@@ -377,10 +302,3 @@ async def cleanup_auth_session(phone_number: str, delay: int = 300):
         finally:
             del auth_sessions[phone_number]
             logger.info(f"Cleaned up auth session for {phone_number}")
-
-
-# Import required modules
-import time
-from datetime import datetime
-from typing import Dict, Any
-import asyncio
