@@ -1,0 +1,43 @@
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    ENVIRONMENT=production
+
+WORKDIR /app
+
+# Install security updates and dependencies
+RUN apt-get update && apt-get upgrade -y && \
+    apt-get install -y \
+    gcc \
+    postgresql-client \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN groupadd -r infosense && useradd -r -g infosense infosense
+
+# Copy requirements
+COPY requirements.txt .
+RUN pip install --no-deps -r requirements.txt
+
+# Copy application
+COPY . .
+
+# Create session directory and set permissions
+RUN mkdir -p /app/sessions && \
+    chown -R infosense:infosense /app/sessions && \
+    chmod 700 /app/sessions
+
+# Switch to non-root user
+USER infosense
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8000/api/system/health || exit 1
+
+# Run with multiple workers for production
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--log-level", "warning"]
