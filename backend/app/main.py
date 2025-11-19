@@ -88,11 +88,6 @@ app.include_router(channels.router, prefix="/api")
 app.include_router(keywords.router, prefix="/api")
 app.include_router(messages.router, prefix="/api")
 
-# Health check endpoint
-@app.get("/health")
-async def health_check():
-    """Simple health check endpoint."""
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
 @app.on_event("startup")
 async def startup_event():
