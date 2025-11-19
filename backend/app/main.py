@@ -11,16 +11,17 @@ from fastapi.responses import JSONResponse
 import logging
 import sys
 import os
+from datetime import datetime, time
 
 # Add parent directory to path
 sys.path.append(os.path.dirname(__file__))
 
 from app.core.config import settings
-from app.core.logger import logger
 from app.db.session import init_db
 from app.api.routes import auth, system, channels, keywords, messages
-from app.core.telegram_client import client_manager
-from app.services.message_processor import processor_registry
+
+# Import logger from utils, not core
+from app.utils.logger import logger
 
 # Create FastAPI app
 app = FastAPI(
@@ -93,7 +94,6 @@ async def health_check():
     """Simple health check endpoint."""
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
-
 @app.on_event("startup")
 async def startup_event():
     """Application startup event."""
@@ -113,7 +113,6 @@ async def startup_event():
         logger.error(f"Startup failed: {e}")
         sys.exit(1)
 
-
 @app.on_event("shutdown")
 async def shutdown_event():
     """Application shutdown event."""
@@ -121,17 +120,14 @@ async def shutdown_event():
     
     try:
         # Stop all message processors
+        from app.services.message_processor import processor_registry
         await processor_registry.stop_all()
         
         # Disconnect all Telegram clients
+        from app.core.telegram_client import client_manager
         await client_manager.disconnect_all()
         
         logger.info("Application shutdown completed")
         
     except Exception as e:
         logger.error(f"Shutdown error: {e}")
-
-
-# Import required modules
-from telethon import TelegramClient
-from datetime import datetime, time
