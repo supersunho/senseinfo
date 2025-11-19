@@ -1,3 +1,4 @@
+# backend/Dockerfile
 FROM python:3.11-slim
 
 # Set environment variables
@@ -15,11 +16,15 @@ RUN apt-get update && apt-get install -y \
     postgresql-client \
     libpq-dev \
     curl \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
 COPY requirements.txt .
-RUN pip install --no-deps -r requirements.txt
+
+# Install Python dependencies with verbose output
+RUN pip install --no-deps --no-cache-dir -r requirements.txt && \
+    pip install --no-deps --no-cache-dir click h11 httptools websockets
 
 # Copy application code
 COPY . .

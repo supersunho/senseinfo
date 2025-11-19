@@ -1,6 +1,8 @@
+# backend/requirements.txt
 # Core Framework
 fastapi==0.115.2
 uvicorn[standard]==0.32.0
+click==8.1.7  # 명시적으로 click 추가
 python-multipart==0.0.12
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
@@ -35,3 +37,8 @@ pytest-cov==4.1.0
 # Utilities
 python-dotenv==1.0.0
 schedule==1.2.0
+
+# Uvicorn standard extras dependencies
+h11==0.14.0
+httptools==0.6.1
+websockets==12.0
